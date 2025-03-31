@@ -8,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler
 from copy import deepcopy
 from joblib import Parallel, delayed
 from conditionalconformal import CondConf
-from localized_conformal_utils import *
+# from localized_conformal_utils import *
 import bisect
 
 import warnings
@@ -654,164 +654,164 @@ class Conformal_Majority_Vote:
         return group_metrics
     
 
-class Conformal_Localized:
-    def __init__ (self, model):
-        self.model = clone(model)
-        self.trained = False
-        self.calibrated = False
-        self.predicted = False
+# class Conformal_Localized:
+#     def __init__ (self, model):
+#         self.model = clone(model)
+#         self.trained = False
+#         self.calibrated = False
+#         self.predicted = False
 
-    def train_predict(self, x_train, y_train,
-                        x_val, y_val, x_test,
-                        alpha=0.1):
-        _ = self.train(x_train = x_train, y_train = y_train)
-        _ = self.calibrate(x_val = x_val, y_val = y_val, alpha = alpha)
-        pred_intervals = self.predict(x_test = x_test)
+#     def train_predict(self, x_train, y_train,
+#                         x_val, y_val, x_test,
+#                         alpha=0.1):
+#         _ = self.train(x_train = x_train, y_train = y_train)
+#         _ = self.calibrate(x_val = x_val, y_val = y_val, alpha = alpha)
+#         pred_intervals = self.predict(x_test = x_test)
 
-        return pred_intervals
+#         return pred_intervals
 
-    def train(self, x_train, y_train):
-        self.model.fit(x_train, y_train)
+#     def train(self, x_train, y_train):
+#         self.model.fit(x_train, y_train)
 
-        # For the cross-validation sample we use the training data:
-        self.__Vcv = np.abs(y_train).flatten()
-        self.__Dcv = cdist(x_train, x_train, metric='euclidean')
+#         # For the cross-validation sample we use the training data:
+#         self.__Vcv = np.abs(y_train).flatten()
+#         self.__Dcv = cdist(x_train, x_train, metric='euclidean')
 
-        # Set up a grid of localizer bandwidths. (In 1D the code used quantiles of Dcv;
-        # here we use the same idea applied to the multivariate distances.)
-        max0 = np.max(self.__Dcv) * 2
-        min0 = np.quantile(self.__Dcv, 0.01)
-        self.__hs = np.exp(np.linspace(np.log(min0), np.log(max0), 20))
-        self.trained = True
+#         # Set up a grid of localizer bandwidths. (In 1D the code used quantiles of Dcv;
+#         # here we use the same idea applied to the multivariate distances.)
+#         max0 = np.max(self.__Dcv) * 2
+#         min0 = np.quantile(self.__Dcv, 0.01)
+#         self.__hs = np.exp(np.linspace(np.log(min0), np.log(max0), 20))
+#         self.trained = True
 
-    def calibrate(self, x_val, y_val, alpha=0.1):
-        if self.trained == False:
-            raise ValueError("Model must be trained before calling calibrate.")
-        self.alpha = alpha
-        self.x_val = x_val
-        self.y_val = y_val
-        self.__eps = np.abs(self.y_val - self.model.predict(self.x_val)).flatten()
-        self.__D = cdist(self.x_val, self.x_val, metric='euclidean')
+#     def calibrate(self, x_val, y_val, alpha=0.1):
+#         if self.trained == False:
+#             raise ValueError("Model must be trained before calling calibrate.")
+#         self.alpha = alpha
+#         self.x_val = x_val
+#         self.y_val = y_val
+#         self.__eps = np.abs(self.y_val - self.model.predict(self.x_val)).flatten()
+#         self.__D = cdist(self.x_val, self.x_val, metric='euclidean')
 
-        # For the LCP module we need to order the calibration scores.
-        self.__order1 = np.argsort(self.__eps) 
-        D_ordered = self.__D[self.__order1][:, self.__order1]
-        eps_ordered = self.__eps[self.__order1]
+#         # For the LCP module we need to order the calibration scores.
+#         self.__order1 = np.argsort(self.__eps) 
+#         D_ordered = self.__D[self.__order1][:, self.__order1]
+#         eps_ordered = self.__eps[self.__order1]
 
-        # make lcp
-        self.LCR = LCP(H=D_ordered, V=eps_ordered, h=0.2, alpha=alpha, type="distance")
+#         # make lcp
+#         self.LCR = LCP(H=D_ordered, V=eps_ordered, h=0.2, alpha=alpha, type="distance")
 
-        # Auto-tuning: here we call the auto-tune function using the training data
-        auto_ret = self.LCR.LCP_auto_tune(V0=self.__Vcv, H0=self.__Dcv, 
-                                          hs=self.__hs, B=2, delta=self.alpha/2, 
-                                          lambda_=1, trace=True)
-        self.LCR.h = auto_ret['h']
+#         # Auto-tuning: here we call the auto-tune function using the training data
+#         auto_ret = self.LCR.LCP_auto_tune(V0=self.__Vcv, H0=self.__Dcv, 
+#                                           hs=self.__hs, B=2, delta=self.alpha/2, 
+#                                           lambda_=1, trace=True)
+#         self.LCR.h = auto_ret['h']
 
-        # Prepare the calibration/localizer quantities:
-        self.LCR.lower_idx()
-        self.LCR.cumsum_unnormalized()
-        self.calibrated = True
+#         # Prepare the calibration/localizer quantities:
+#         self.LCR.lower_idx()
+#         self.LCR.cumsum_unnormalized()
+#         self.calibrated = True
 
        
-    def predict(self, x_test):
-        if self.calibrated == False:
-            raise ValueError("Model must be calibrated before calling predict.")
-        # do test prediction
-        y_test_pred = self.model.predict(x_test)
+#     def predict(self, x_test):
+#         if self.calibrated == False:
+#             raise ValueError("Model must be calibrated before calling predict.")
+#         # do test prediction
+#         y_test_pred = self.model.predict(x_test)
 
-        # computer distances
-        Dnew = cdist(x_test, self.x_val, metric='euclidean')
-        DnewT = Dnew.T
+#         # computer distances
+#         Dnew = cdist(x_test, self.x_val, metric='euclidean')
+#         DnewT = Dnew.T
 
-        # make predictions
-        self.LCR.LCP_construction(Hnew=Dnew[:, self.__order1], HnewT=DnewT[self.__order1, :])
-        deltaLCP = self.LCR.band_V
-        lb = y_test_pred - deltaLCP
-        ub = y_test_pred + deltaLCP
+#         # make predictions
+#         self.LCR.LCP_construction(Hnew=Dnew[:, self.__order1], HnewT=DnewT[self.__order1, :])
+#         deltaLCP = self.LCR.band_V
+#         lb = y_test_pred - deltaLCP
+#         ub = y_test_pred + deltaLCP
 
-        self.prediction_intervals = pd.DataFrame({"lb": lb, "ub": ub, "point_est": y_test_pred})
-        self.predicted = True
-        return self.prediction_intervals
+#         self.prediction_intervals = pd.DataFrame({"lb": lb, "ub": ub, "point_est": y_test_pred})
+#         self.predicted = True
+#         return self.prediction_intervals
     
-    def evaluate(self, y_test, scale_width=True):
-        """
-        Evaluates the prediction intervals 
-        and computes coverage and length metrics.
+#     def evaluate(self, y_test, scale_width=True):
+#         """
+#         Evaluates the prediction intervals 
+#         and computes coverage and length metrics.
 
-        Parameters
-        ----------
-        y_test : np.ndarray
-            The true target values for the test set.
+#         Parameters
+#         ----------
+#         y_test : np.ndarray
+#             The true target values for the test set.
 
-        Returns
-        -------
-        pd.DataFrame
-            DataFrame containing evaluation metrics for each alpha.
-        """
-        if self.predicted is False:
-            raise ValueError("Please call 'predict' first to generate prediction intervals.")
+#         Returns
+#         -------
+#         pd.DataFrame
+#             DataFrame containing evaluation metrics for each alpha.
+#         """
+#         if self.predicted is False:
+#             raise ValueError("Please call 'predict' first to generate prediction intervals.")
 
-        lower_bounds = self.prediction_intervals["lb"]
-        upper_bounds = self.prediction_intervals["ub"]
+#         lower_bounds = self.prediction_intervals["lb"]
+#         upper_bounds = self.prediction_intervals["ub"]
 
-        inf_index = np.where(upper_bounds == np.Inf)[0]
-        inf_percent = len(inf_index) / len(upper_bounds)
+#         inf_index = np.where(upper_bounds == np.Inf)[0]
+#         inf_percent = len(inf_index) / len(upper_bounds)
 
-        y_test = y_test[upper_bounds != np.Inf]
-        lower_bounds = lower_bounds[upper_bounds != np.Inf]
-        upper_bounds = upper_bounds[upper_bounds != np.Inf]
+#         y_test = y_test[upper_bounds != np.Inf]
+#         lower_bounds = lower_bounds[upper_bounds != np.Inf]
+#         upper_bounds = upper_bounds[upper_bounds != np.Inf]
         
 
-        coverage = np.mean((lower_bounds <= y_test) & (y_test <= upper_bounds))
-        avg_length = np.mean(upper_bounds - lower_bounds)
-        med_length = np.median(upper_bounds - lower_bounds)
-        range_y_test = y_test.max() - y_test.min()
+#         coverage = np.mean((lower_bounds <= y_test) & (y_test <= upper_bounds))
+#         avg_length = np.mean(upper_bounds - lower_bounds)
+#         med_length = np.median(upper_bounds - lower_bounds)
+#         range_y_test = y_test.max() - y_test.min()
 
-        # Compile results into a DataFrame
-        results_df = pd.DataFrame([{
-            "coverage": coverage,
-            "avg_length": avg_length,
-            "median_length": med_length,
-            "range_y_test": range_y_test,
-            "alpha": self.alpha,
-            'inf_prop': inf_percent
-        }])
-        if scale_width:
-            results_df["scaled_avg_length"] = avg_length / range_y_test
-            results_df["scaled_median_length"] = med_length / range_y_test
+#         # Compile results into a DataFrame
+#         results_df = pd.DataFrame([{
+#             "coverage": coverage,
+#             "avg_length": avg_length,
+#             "median_length": med_length,
+#             "range_y_test": range_y_test,
+#             "alpha": self.alpha,
+#             'inf_prop': inf_percent
+#         }])
+#         if scale_width:
+#             results_df["scaled_avg_length"] = avg_length / range_y_test
+#             results_df["scaled_median_length"] = med_length / range_y_test
 
-        return results_df
+#         return results_df
     
-    def evaluate_subgroups(self, y_test, subgroups, scale_width=True):
-        if self.predicted == False:
-            raise ValueError("Please call 'predict' first to generate prediction intervals.")
-        pred_modified = deepcopy(self.prediction_intervals)
-        pred_modified["truth"] = y_test
-        pred_modified["subgroup"] = subgroups
+#     def evaluate_subgroups(self, y_test, subgroups, scale_width=True):
+#         if self.predicted == False:
+#             raise ValueError("Please call 'predict' first to generate prediction intervals.")
+#         pred_modified = deepcopy(self.prediction_intervals)
+#         pred_modified["truth"] = y_test
+#         pred_modified["subgroup"] = subgroups
 
-        lower_bounds = pred_modified["lb"]
-        upper_bounds = pred_modified["ub"]
+#         lower_bounds = pred_modified["lb"]
+#         upper_bounds = pred_modified["ub"]
 
-        pred_modified['width'] = upper_bounds - lower_bounds
-        pred_modified['covers'] = (lower_bounds <= pred_modified['truth']) & (pred_modified['truth'] <= upper_bounds)
-        pred_modified['inf'] = (upper_bounds == np.Inf)
+#         pred_modified['width'] = upper_bounds - lower_bounds
+#         pred_modified['covers'] = (lower_bounds <= pred_modified['truth']) & (pred_modified['truth'] <= upper_bounds)
+#         pred_modified['inf'] = (upper_bounds == np.Inf)
 
 
-        group_metrics = pred_modified.groupby("subgroup").agg(
-            coverage = ("covers", lambda x: np.mean(x[x != np.Inf])),
-            avg_length = ("width", lambda x: np.mean(x[x != np.Inf])),
-            median_length = ("width", lambda x: np.median(x[x != np.Inf])),
-            range_y_test = ("truth", lambda x: x.max() - x.min()),
-            inf_prop = ("inf", "mean")
-        ).reset_index()
-        group_metrics["alpha"] = self.alpha
+#         group_metrics = pred_modified.groupby("subgroup").agg(
+#             coverage = ("covers", lambda x: np.mean(x[x != np.Inf])),
+#             avg_length = ("width", lambda x: np.mean(x[x != np.Inf])),
+#             median_length = ("width", lambda x: np.median(x[x != np.Inf])),
+#             range_y_test = ("truth", lambda x: x.max() - x.min()),
+#             inf_prop = ("inf", "mean")
+#         ).reset_index()
+#         group_metrics["alpha"] = self.alpha
 
-        if scale_width:
-            range_y_test = y_test.max() - y_test.min()
-            group_metrics["scaled_avg_length"] = group_metrics["avg_length"] / range_y_test
-            group_metrics["scaled_median_length"] = group_metrics["median_length"] / range_y_test
+#         if scale_width:
+#             range_y_test = y_test.max() - y_test.min()
+#             group_metrics["scaled_avg_length"] = group_metrics["avg_length"] / range_y_test
+#             group_metrics["scaled_median_length"] = group_metrics["median_length"] / range_y_test
 
-        return group_metrics
+#         return group_metrics
     
 class Conformal_Conditional:
     def __init__(self, model):
